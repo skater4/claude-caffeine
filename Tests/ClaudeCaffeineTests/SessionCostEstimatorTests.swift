@@ -556,20 +556,57 @@ final class SessionCostEstimatorTests: XCTestCase {
         XCTAssertEqual(snapshot.activeSessions.first?.totalCost ?? 0, expected, accuracy: 1e-9)
     }
 
-    func testSonnet5UsesSonnetPricing() throws {
+    func testSonnet5UsesPermanentTwoTenPricing() throws {
+        // Anthropic made the $2/$10 launch rate the standard price on 2026-08-10.
         let now = Date()
         let ts = ISO8601DateFormatter().string(from: now)
         let projectDir = fixtureRootURL.appendingPathComponent("sonnet5")
         try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
 
         let sessionFile = projectDir.appendingPathComponent("s5.jsonl")
-        try assistantLine(model: "claude-sonnet-5", input: 1000, output: 500, cacheCreation: 0, cacheRead: 0, timestamp: ts)
+        try assistantLine(model: "claude-sonnet-5", input: 1000, output: 500, cacheCreation: 400, cacheRead: 1000, timestamp: ts)
             .write(to: sessionFile, atomically: true, encoding: .utf8)
 
         let estimator = SessionCostEstimator(projectsRootURL: fixtureRootURL)
         let snapshot = estimator.estimateCosts(now: now)
 
-        let expected = (1000.0 * 3.0 + 500.0 * 15.0) / 1_000_000.0
+        let expected = (1000.0 * 2.0 + 500.0 * 10.0 + 400.0 * 2.50 + 1000.0 * 0.20) / 1_000_000.0
+        XCTAssertEqual(snapshot.activeSessions.first?.totalCost ?? 0, expected, accuracy: 1e-9)
+    }
+
+    func testDatedSonnet5SnapshotUsesSonnet5Pricing() throws {
+        let now = Date()
+        let ts = ISO8601DateFormatter().string(from: now)
+        let projectDir = fixtureRootURL.appendingPathComponent("sonnet5-dated")
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+
+        let sessionFile = projectDir.appendingPathComponent("s5d.jsonl")
+        try assistantLine(model: "claude-sonnet-5-20260801", input: 1000, output: 500, cacheCreation: 0, cacheRead: 0, timestamp: ts)
+            .write(to: sessionFile, atomically: true, encoding: .utf8)
+
+        let estimator = SessionCostEstimator(projectsRootURL: fixtureRootURL)
+        let snapshot = estimator.estimateCosts(now: now)
+
+        let sonnet5Cost = (1000.0 * 2.0 + 500.0 * 10.0) / 1_000_000.0
+        let sonnet4xCost = (1000.0 * 3.0 + 500.0 * 15.0) / 1_000_000.0
+        XCTAssertEqual(snapshot.activeSessions.first?.totalCost ?? 0, sonnet5Cost, accuracy: 1e-9)
+        XCTAssertNotEqual(sonnet5Cost, sonnet4xCost)
+    }
+
+    func testOpus5UsesCurrentTier() throws {
+        let now = Date()
+        let ts = ISO8601DateFormatter().string(from: now)
+        let projectDir = fixtureRootURL.appendingPathComponent("opus5")
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+
+        let sessionFile = projectDir.appendingPathComponent("o5.jsonl")
+        try assistantLine(model: "claude-opus-5", input: 1000, output: 500, cacheCreation: 400, cacheRead: 1000, timestamp: ts)
+            .write(to: sessionFile, atomically: true, encoding: .utf8)
+
+        let estimator = SessionCostEstimator(projectsRootURL: fixtureRootURL)
+        let snapshot = estimator.estimateCosts(now: now)
+
+        let expected = (1000.0 * 5.0 + 500.0 * 25.0 + 400.0 * 6.25 + 1000.0 * 0.50) / 1_000_000.0
         XCTAssertEqual(snapshot.activeSessions.first?.totalCost ?? 0, expected, accuracy: 1e-9)
     }
 
