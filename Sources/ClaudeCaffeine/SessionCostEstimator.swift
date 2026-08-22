@@ -53,7 +53,7 @@ struct CostSnapshot: Sendable {
 final class SessionCostEstimator {
     // Rates are per 1M tokens, Anthropic standard API. Cache-write is the 5-minute
     // TTL rate (1.25x input); cache-read is 0.1x input.
-    // Source: https://claude.com/pricing (verified 2026-07).
+    // Source: https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-08-21).
 
     /// Fable 5 — most capable widely released model ($10 in / $50 out).
     /// Also covers Mythos 5, which shares Fable 5's pricing.
@@ -61,7 +61,7 @@ final class SessionCostEstimator {
         inputPerMillion: 10.0, outputPerMillion: 50.0,
         cacheCreationPerMillion: 12.50, cacheReadPerMillion: 1.00
     )
-    /// Opus 4.5 / 4.6 / 4.7 / 4.8 — current Opus tier ($5 in / $25 out).
+    /// Opus 5 / 4.8 / 4.7 / 4.6 / 4.5 — current Opus tier ($5 in / $25 out).
     private static let opusCurrentPricing = ModelPricing(
         inputPerMillion: 5.0, outputPerMillion: 25.0,
         cacheCreationPerMillion: 6.25, cacheReadPerMillion: 0.50
@@ -71,9 +71,14 @@ final class SessionCostEstimator {
         inputPerMillion: 15.0, outputPerMillion: 75.0,
         cacheCreationPerMillion: 18.75, cacheReadPerMillion: 1.50
     )
-    /// Sonnet 4.x / Sonnet 5 ($3 in / $15 out). Sonnet 5 carries a reduced
-    /// intro rate ($2 / $10) through 2026-08-31; standard rates are used here to
-    /// stay aligned with JSONL cost parsers (ccusage) and permanent pricing.
+    /// Sonnet 5 — permanent standard rate ($2 in / $10 out). The $2/$10 figure
+    /// was announced as intro pricing through 2026-08-31; Anthropic made it the
+    /// standard price on 2026-08-10 and cancelled the $3/$15 step-up.
+    private static let sonnet5Pricing = ModelPricing(
+        inputPerMillion: 2.0, outputPerMillion: 10.0,
+        cacheCreationPerMillion: 2.50, cacheReadPerMillion: 0.20
+    )
+    /// Sonnet 4.x ($3 in / $15 out).
     private static let sonnetPricing = ModelPricing(
         inputPerMillion: 3.0, outputPerMillion: 15.0,
         cacheCreationPerMillion: 3.75, cacheReadPerMillion: 0.30
@@ -90,13 +95,14 @@ final class SessionCostEstimator {
     private static let pricing: [String: ModelPricing] = [
         "claude-fable-5": fablePricing,
         "claude-mythos-5": fablePricing,
+        "claude-opus-5": opusCurrentPricing,
         "claude-opus-4-8": opusCurrentPricing,
         "claude-opus-4-7": opusCurrentPricing,
         "claude-opus-4-6": opusCurrentPricing,
         "claude-opus-4-5": opusCurrentPricing,
         "claude-opus-4-1": opusLegacyPricing,
         "claude-opus-4-20250514": opusLegacyPricing,
-        "claude-sonnet-5": sonnetPricing,
+        "claude-sonnet-5": sonnet5Pricing,
         "claude-sonnet-4-6": sonnetPricing,
         "claude-sonnet-4-5": sonnetPricing,
         "claude-haiku-4-5": haiku45Pricing,
@@ -346,7 +352,7 @@ final class SessionCostEstimator {
 
         if m.contains("opus") {
             // Legacy $15/$75 tier is only Opus 3, Opus 4, and Opus 4.1. Everything
-            // from Opus 4.5 onward (4.5/4.6/4.7/4.8 and any future release) is the
+            // from Opus 4.5 onward (4.5/4.6/4.7/4.8/5 and any future release) is the
             // current $5/$25 tier, so default unknown Opus IDs to current pricing.
             let isLegacy = m.contains("opus-4-1") || m.contains("opus-4.1")
                 || m.contains("opus-4-0") || m.contains("opus-4.0")
@@ -363,7 +369,12 @@ final class SessionCostEstimator {
             return haiku45Pricing
         }
 
-        if m.contains("sonnet") { return sonnetPricing }
+        if m.contains("sonnet") {
+            // Sonnet 5 is a cheaper tier than 4.x. Match "sonnet-5" only — do not
+            // treat "sonnet-4-5" as Sonnet 5.
+            if m.contains("sonnet-5") { return sonnet5Pricing }
+            return sonnetPricing
+        }
 
         return fallbackPricing
     }
