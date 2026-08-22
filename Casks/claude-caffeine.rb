@@ -5,7 +5,7 @@ cask "claude-caffeine" do
   url "https://github.com/jmslau/claude-caffeine/releases/download/v#{version}/Claude-Caffeine.app.zip",
       verified: "github.com/jmslau/claude-caffeine/"
   name "Claude Caffeine"
-  desc "Keeps your Mac awake while Claude Code is working"
+  desc "Keeps your Mac awake while Claude Code or a local Cursor agent is working"
   homepage "https://github.com/jmslau/claude-caffeine"
 
   depends_on macos: ">= :ventura"

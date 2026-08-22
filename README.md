@@ -177,7 +177,7 @@ Release build and cask update:
 
 ## Changelog
 
-### Unreleased
+### v1.3.6
 
 - **Updated pricing for Sonnet 5, Opus 5, Opus 4.8, and Fable 5** — Sonnet 5 now uses Anthropic’s permanent \$2 / \$10 per MTok rate (5m cache write \$2.50, cache hit \$0.20), not the Sonnet 4.x \$3 / \$15 tier. Opus 5 and Opus 4.8 stay on the current Opus \$5 / \$25 tier; Fable 5 stays at \$10 / \$50.
 - **Cursor agent support** — Local Cursor Agent Chat, Cmd+K, and background agents keep the Mac awake (including closed-lid). Cloud agents and Tab completions are not covered.
