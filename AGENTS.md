@@ -39,7 +39,7 @@ The app uses a reactive, session-aware approach:
 
 3. **Session Monitoring**: `ClaudeHookMonitor` polls both `caffeine_sessions` directories every 5 seconds. If any session files exist, the Mac is kept awake. This supports multiple concurrent sessions and avoids race conditions by using individual files per `session_id` / `conversation_id`.
 
-4. **Auto-Resume Wrapper**: An experimental Python wrapper tracks "hit your limit" messages and maintains its own session file while waiting for a reset, ensuring the Mac stays awake specifically during the wait timer.
+4. **Auto-Resume Hold**: When a usage limit ends a turn, Claude Code fires `StopFailure` with `error: "rate_limit"` and the "You've hit your … limit · resets 3pm" message. `idle.js` then writes the session file with a `holdUntil` timestamp (15 minutes after the reset) instead of removing it, and keeps it through `Notification`, `SubagentStop` and `Elicitation` events. While Auto-Resume is enabled, `ClaudeHookMonitor` counts such files as limit holds: the Mac stays awake (including closed-lid) so Claude Code can continue on its own, but the session does not count as working. With Auto-Resume off, the file is dropped like any idle session.
 
 ## Key Design Decisions
 
@@ -54,7 +54,7 @@ The app uses a reactive, session-aware approach:
 | File | Lines | Role |
 |------|-------|------|
 | `ClaudeCaffeine.swift` | ~1050 | App entry point, `AppDelegate`, menu bar UI, poll loop, state transitions |
-| `ClaudeHookMonitor.swift` | ~50 | Scans `~/.claude/caffeine_sessions/` and `~/.cursor/caffeine_sessions/` for active session files |
+| `ClaudeHookMonitor.swift` | ~50 | Scans `~/.claude/caffeine_sessions/` and `~/.cursor/caffeine_sessions/` for active session files and Auto-Resume limit holds |
 | `HookInstaller.swift` | ~120 | Installs/uninstalls Node.js hook helpers and updates Claude Code `settings.json` |
 | `CursorHookInstaller.swift` | ~180 | Installs/uninstalls user-level Cursor hooks in `~/.cursor/hooks.json` |
 | `SleepAssertionManager.swift` | ~70 | Creates/releases `IOPMAssertion` for system and display sleep prevention |
@@ -62,7 +62,7 @@ The app uses a reactive, session-aware approach:
 | `HelperInstaller.swift` | ~155 | Installs/uninstalls the sudoers entry and shell script for closed-lid mode |
 | `BatteryMonitor.swift` | ~50 | Reads battery level and charging state from IOKit power sources |
 | `PowerSourceMonitor.swift` | ~50 | Listens for AC/battery power source changes via `IOPSNotificationCreateRunLoopSource` |
-| `AutoResumeManager.swift` | ~250 | Manages the Python PTY wrapper for limit-aware auto-resuming |
+| `AutoResumeManager.swift` | ~100 | Auto-Resume toggle; removes the shell alias and PTY wrapper that v1.3.6 and earlier installed |
 
 ## Test Files
 
@@ -72,7 +72,9 @@ The app uses a reactive, session-aware approach:
 | `ClosedDisplayManagerTests.swift` | Enable/disable state machine, helper-not-installed guard, force disable |
 | `HelperInstallerTests.swift` | Script writing, sudoers validation, install/uninstall flows |
 | `CursorHookInstallerTests.swift` | Cursor hooks.json merge, idempotent install, uninstall preserves other hooks |
-| `ClaudeHookMonitorTests.swift` | Claude + Cursor session OR, stale/dead-PID cleanup, activity menu copy |
+| `ClaudeHookMonitorTests.swift` | Claude + Cursor session OR, stale/dead-PID cleanup, activity menu copy, limit holds |
+| `IdleHookScriptTests.swift` | Runs `idle.js` with node: rate-limit `StopFailure` holds until the reset, other turn ends remove the session |
+| `AutoResumeManagerTests.swift` | Toggle state, removal of the legacy alias/wrapper, pass-through wrapper |
 
 ## How to Work on This Project
 
