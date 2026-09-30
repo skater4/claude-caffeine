@@ -110,12 +110,56 @@ final class IdleHookScriptTests: XCTestCase {
             let input: [String: Any] = ["session_id": "session-1", "hook_event_name": event]
             try #"{"timestamp": 1, "pid": 1, "holdUntil": \#(future)}"#.write(to: sessionFile, atomically: true, encoding: .utf8)
             let held = try runIdleHook(input)
-            XCTAssertNotNil(held, "\(event) must not end the limit hold")
-
+            XCTAssertEqual((held?["holdUntil"] as? NSNumber)?.doubleValue, future, "\(event) must not end the limit hold")
+        }
+        for event in ["Notification", "Elicitation"] {
+            let input: [String: Any] = ["session_id": "session-1", "hook_event_name": event]
             try #"{"timestamp": 1, "pid": 1}"#.write(to: sessionFile, atomically: true, encoding: .utf8)
             let normal = try runIdleHook(input)
             XCTAssertNil(normal, "\(event) still ends a normal session")
         }
+    }
+
+    /// Subagent hooks carry the parent's session_id, so a finished subagent says nothing about the session.
+    func testSubagentStopKeepsTheSessionActive() throws {
+        try #"{"timestamp": 1, "pid": 1}"#.write(to: sessionFile, atomically: true, encoding: .utf8)
+        let before = Date().timeIntervalSince1970 * 1000
+        let session = try runIdleHook([
+            "session_id": "session-1",
+            "hook_event_name": "SubagentStop",
+            "agent_id": "agent-1",
+            "agent_type": "general-purpose",
+            "background_tasks": [],
+        ])
+
+        let timestamp = try XCTUnwrap(session?["timestamp"] as? NSNumber, "a finished subagent must not end the session")
+        XCTAssertGreaterThanOrEqual(timestamp.doubleValue, before)
+    }
+
+    /// "Waiting for 1 background agent to finish": the turn ended, the work did not.
+    func testStopWhileBackgroundAgentsRunKeepsTheSessionActive() throws {
+        for type in ["subagent", "workflow", "teammate"] {
+            try #"{"timestamp": 1, "pid": 1}"#.write(to: sessionFile, atomically: true, encoding: .utf8)
+            let session = try runIdleHook([
+                "session_id": "session-1",
+                "hook_event_name": "Stop",
+                "background_tasks": [["id": "task-1", "type": type, "status": "running", "description": "part-2"]],
+                "session_crons": [],
+            ])
+            XCTAssertNotNil(session?["timestamp"] as? NSNumber, "Stop with a running background \(type) must not end the session")
+        }
+    }
+
+    /// Background shells (dev servers, watchers) are not Claude working; the turn is finished.
+    func testStopWithOnlyBackgroundShellsEndsTheSession() throws {
+        try #"{"timestamp": 1, "pid": 1}"#.write(to: sessionFile, atomically: true, encoding: .utf8)
+        let session = try runIdleHook([
+            "session_id": "session-1",
+            "hook_event_name": "Stop",
+            "background_tasks": [["id": "task-1", "type": "shell", "status": "running", "description": "npm run dev", "command": "npm run dev"]],
+            "session_crons": [],
+        ])
+        XCTAssertNil(session)
     }
 
     // MARK: - Helpers

@@ -33,7 +33,7 @@ ClaudeCaffeine.swift          Entry point + AppDelegate (menu bar UI, poll loop,
 
 The app uses a reactive, session-aware approach:
 
-1. **Claude Code Hooks**: Claude Code is configured to trigger `active.js` and `idle.js` scripts on specific events (`UserPromptSubmit`, `PreToolUse`, `Stop`, `Elicitation`, etc.). These scripts manage session-specific state files in `~/.claude/caffeine_sessions/`.
+1. **Claude Code Hooks**: Claude Code is configured to trigger `active.js` and `idle.js` scripts on specific events (`UserPromptSubmit`, `PreToolUse`, `Stop`, `Elicitation`, etc.). These scripts manage session-specific state files in `~/.claude/caffeine_sessions/`. Subagent hooks carry the parent's `session_id`, so `idle.js` keeps the session active on `SubagentStop` and on a `Stop` whose `background_tasks` still lists agent work (`subagent`, `workflow`, `teammate`).
 
 2. **Cursor Hooks**: User-level hooks in `~/.cursor/hooks.json` fire on Agent Chat / Cmd+K events and write session files to `~/.cursor/caffeine_sessions/`. Cloud agents are not detected (they run off-machine).
 

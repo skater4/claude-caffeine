@@ -47,6 +47,8 @@ const HOLD_GRACE_MS = 15 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 // Events that do not end a turn; they must not end a running limit hold.
 const KEEPS_HOLD = ['Notification', 'SubagentStop', 'Elicitation'];
+// Background work that is Claude itself working (Claude Code's labels for local agent tasks).
+const AGENT_TASK_TYPES = ['subagent', 'workflow', 'teammate'];
 
 // When a usage limit ended the turn, returns when Auto-Resume should stop keeping the Mac awake.
 function limitHoldUntil(input, now) {
@@ -68,6 +70,14 @@ function isHolding(sessionFile, now) {
     try { return JSON.parse(fs.readFileSync(sessionFile, 'utf8')).holdUntil > now; } catch (e) { return false; }
 }
 
+// Subagent hooks carry the parent's session_id, so a finished subagent does not end the session, and a turn
+// that ends while background agents run leaves the session paused, not done (see Stop's background_tasks).
+function isStillWorking(input) {
+    if (input.hook_event_name === 'SubagentStop') return true;
+    return input.hook_event_name === 'Stop'
+        && (input.background_tasks || []).some((task) => AGENT_TASK_TYPES.includes(task.type));
+}
+
 try {
     const input = JSON.parse(fs.readFileSync(0, 'utf8'));
     const sessionId = input.session_id;
@@ -81,6 +91,9 @@ try {
             fs.writeFileSync(sessionFile, JSON.stringify({ timestamp: now, pid: process.ppid, holdUntil }));
         } else if (KEEPS_HOLD.includes(input.hook_event_name) && isHolding(sessionFile, now)) {
             // e.g. "Claude is waiting for your input" while the session sits at the limit: keep holding.
+        } else if (isStillWorking(input)) {
+            fs.mkdirSync(sessionsDir, { recursive: true });
+            fs.writeFileSync(sessionFile, JSON.stringify({ timestamp: now, pid: process.ppid }));
         } else if (fs.existsSync(sessionFile)) {
             try { fs.unlinkSync(sessionFile); } catch (e) {}
         }
